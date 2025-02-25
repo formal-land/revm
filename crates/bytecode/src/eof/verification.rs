@@ -1,10 +1,9 @@
 use crate::{
     eof::{Eof, EofDecodeError, TypesSection},
-    opcode::{self, OPCODE_INFO},
-    utils::{read_i16, read_u16},
+    opcode::OPCODE_INFO,
 };
 use primitives::Bytes;
-use specification::constants::{MAX_INITCODE_SIZE, STACK_LIMIT};
+use specification::constants::MAX_INITCODE_SIZE;
 
 use core::{convert::identity, mem};
 use std::{borrow::Cow, fmt, vec, vec::Vec};
@@ -404,11 +403,11 @@ impl core::error::Error for EofValidationError {}
 /// Validate stack requirements and if all codes sections are used.
 pub fn validate_eof_code(
     code: &[u8],
-    data_size: usize,
+    _data_size: usize,
     this_types_index: usize,
-    num_of_containers: usize,
+    _num_of_containers: usize,
     types: &[TypesSection],
-    tracker: &mut AccessTracker,
+    _tracker: &mut AccessTracker,
 ) -> Result<(), EofValidationError> {
     let this_types = &types[this_types_index];
 
@@ -455,7 +454,7 @@ pub fn validate_eof_code(
     let mut next_smallest = this_types.inputs as i32;
     let mut next_biggest = this_types.inputs as i32;
 
-    let mut is_returning = false;
+    let is_returning = false;
 
     let mut i = 0;
     // We can check validity and jump destinations in one pass.
@@ -505,180 +504,13 @@ pub fn validate_eof_code(
             }
         }
         // IO diff used to generate next instruction smallest/biggest value.
-        let mut stack_io_diff = opcode.io_diff() as i32;
+        let stack_io_diff = opcode.io_diff() as i32;
         // How many stack items are required for this opcode.
-        let mut stack_requirement = opcode.inputs() as i32;
+        let stack_requirement = opcode.inputs() as i32;
         // Additional immediate bytes for RJUMPV, it has dynamic vtable.
-        let mut rjumpv_additional_immediates = 0;
+        let rjumpv_additional_immediates = 0;
         // If opcodes is RJUMP, RJUMPI or RJUMPV then this will have absolute jumpdest.
-        let mut absolute_jumpdest = vec![];
-        match op {
-            opcode::RJUMP | opcode::RJUMPI => {
-                let offset = unsafe { read_i16(code.as_ptr().add(i + 1)) } as isize;
-                absolute_jumpdest = vec![offset + 3 + i as isize];
-                // RJUMP is considered a terminating opcode.
-            }
-            opcode::RJUMPV => {
-                // Code length for RJUMPV is checked with immediate size.
-                let max_index = code[i + 1] as usize;
-                let len = max_index + 1;
-                // And max_index+1 is to get size of vtable as index starts from 0.
-                rjumpv_additional_immediates = len * 2;
-
-                // +1 is for max_index byte
-                if i + 1 + rjumpv_additional_immediates >= code.len() {
-                    // Malfunctional code RJUMPV vtable is not complete
-                    return Err(EofValidationError::MissingRJUMPVImmediateBytes);
-                }
-
-                // Mark vtable as immediate, max_index was already marked.
-                for imm in 0..rjumpv_additional_immediates {
-                    // SAFETY: Immediate size is checked above.
-                    jumps[i + 2 + imm].mark_as_immediate()?;
-                }
-
-                let mut jumps = Vec::with_capacity(len);
-                for vtablei in 0..len {
-                    let offset =
-                        unsafe { read_i16(code.as_ptr().add(i + 2 + 2 * vtablei)) } as isize;
-                    jumps.push(offset + i as isize + 2 + rjumpv_additional_immediates as isize);
-                }
-                absolute_jumpdest = jumps
-            }
-            opcode::CALLF => {
-                let section_i: usize = unsafe { read_u16(code.as_ptr().add(i + 1)) } as usize;
-                let Some(target_types) = types.get(section_i) else {
-                    // Code section out of bounds.
-                    return Err(EofValidationError::CodeSectionOutOfBounds);
-                };
-
-                // CALLF operand must not point to a section with 0x80 as outputs (non-returning)
-                if target_types.is_non_returning() {
-                    return Err(EofValidationError::CALLFNonReturningFunction);
-                }
-                // Stack input for this opcode is the input of the called code.
-                stack_requirement = target_types.inputs as i32;
-                // Stack diff depends on input/output of the called code.
-                stack_io_diff = target_types.io_diff();
-                // Mark called code as accessed.
-                tracker.access_code(section_i);
-
-                // We decrement by `types.inputs` as they are considered as send
-                // to the called code and included in types.max_stack_size.
-                if this_instruction.biggest - stack_requirement + target_types.max_stack_size as i32
-                    > STACK_LIMIT as i32
-                {
-                    // If stack max items + called code max stack size
-                    return Err(EofValidationError::StackOverflow);
-                }
-            }
-            opcode::JUMPF => {
-                let target_index = unsafe { read_u16(code.as_ptr().add(i + 1)) } as usize;
-                // Targeted code needs to have zero outputs (be non returning).
-                let Some(target_types) = types.get(target_index) else {
-                    // Code section out of bounds.
-                    return Err(EofValidationError::CodeSectionOutOfBounds);
-                };
-
-                // We decrement types.inputs as they are considered send to the called code.
-                // And included in types.max_stack_size.
-                if this_instruction.biggest - target_types.inputs as i32
-                    + target_types.max_stack_size as i32
-                    > STACK_LIMIT as i32
-                {
-                    // stack overflow
-                    return Err(EofValidationError::StackOverflow);
-                }
-                tracker.access_code(target_index);
-
-                if target_types.is_non_returning() {
-                    // If it is not returning
-                    stack_requirement = target_types.inputs as i32;
-                } else {
-                    is_returning = true;
-                    // Check if target code produces enough outputs.
-                    if this_types.outputs < target_types.outputs {
-                        return Err(EofValidationError::JUMPFEnoughOutputs);
-                    }
-
-                    stack_requirement = this_types.outputs as i32 + target_types.inputs as i32
-                        - target_types.outputs as i32;
-
-                    // Stack requirement needs to more than this instruction biggest stack number.
-                    if this_instruction.biggest > stack_requirement {
-                        return Err(EofValidationError::JUMPFStackHigherThanOutputs);
-                    }
-
-                    // If this instruction max + target_types max is more then stack limit.
-                    if this_instruction.biggest + stack_requirement > STACK_LIMIT as i32 {
-                        return Err(EofValidationError::StackOverflow);
-                    }
-                }
-            }
-            opcode::EOFCREATE => {
-                let index = code[i + 1] as usize;
-                if index >= num_of_containers {
-                    // Code section out of bounds.
-                    return Err(EofValidationError::EOFCREATEInvalidIndex);
-                }
-                tracker.set_subcontainer_type(index, CodeType::ReturnContract)?;
-            }
-            opcode::RETURNCONTRACT => {
-                let index = code[i + 1] as usize;
-                if index >= num_of_containers {
-                    // Code section out of bounds.
-                    // TODO : Custom error
-                    return Err(EofValidationError::EOFCREATEInvalidIndex);
-                }
-                if *tracker
-                    .this_container_code_type
-                    .get_or_insert(CodeType::ReturnContract)
-                    != CodeType::ReturnContract
-                {
-                    // TODO : Make custom error
-                    return Err(EofValidationError::SubContainerCalledInTwoModes);
-                }
-                tracker.set_subcontainer_type(index, CodeType::ReturnOrStop)?;
-            }
-            opcode::RETURN | opcode::STOP => {
-                if *tracker
-                    .this_container_code_type
-                    .get_or_insert(CodeType::ReturnOrStop)
-                    != CodeType::ReturnOrStop
-                {
-                    return Err(EofValidationError::SubContainerCalledInTwoModes);
-                }
-            }
-            opcode::DATALOADN => {
-                let index = unsafe { read_u16(code.as_ptr().add(i + 1)) } as isize;
-                if data_size < 32 || index > data_size as isize - 32 {
-                    // Data load out of bounds.
-                    return Err(EofValidationError::DataLoadOutOfBounds);
-                }
-            }
-            opcode::RETF => {
-                stack_requirement = this_types.outputs as i32;
-                // Mark section as returning.
-                is_returning = true;
-
-                if this_instruction.biggest > stack_requirement {
-                    return Err(EofValidationError::RETFBiggestStackNumMoreThenOutputs);
-                }
-            }
-            opcode::DUPN => {
-                stack_requirement = code[i + 1] as i32 + 1;
-            }
-            opcode::SWAPN => {
-                stack_requirement = code[i + 1] as i32 + 2;
-            }
-            opcode::EXCHANGE => {
-                let imm = code[i + 1];
-                let n = (imm >> 4) + 1;
-                let m = (imm & 0x0F) + 1;
-                stack_requirement = n as i32 + m as i32 + 1;
-            }
-            _ => {}
-        }
+        let absolute_jumpdest: Vec<isize> = vec![];
         // Check if stack requirement is more than smallest stack items.
         if stack_requirement > this_instruction.smallest {
             // Opcode requirement is more than smallest stack items.

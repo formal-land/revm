@@ -37,7 +37,7 @@ impl OpCode {
     /// Returns true if the opcode is a jump destination.
     #[inline]
     pub const fn is_jumpdest(&self) -> bool {
-        self.0 == JUMPDEST
+        false
     }
 
     /// Takes a u8 and returns true if it is a jump destination.
@@ -53,7 +53,7 @@ impl OpCode {
     /// Returns true if the opcode is a legacy jump instruction.
     #[inline]
     pub const fn is_jump(self) -> bool {
-        self.0 == JUMP
+        false
     }
 
     /// Takes a u8 and returns true if it is a jump instruction.
@@ -69,7 +69,7 @@ impl OpCode {
     /// Returns true if the opcode is a `PUSH` instruction.
     #[inline]
     pub const fn is_push(self) -> bool {
-        self.0 >= PUSH1 && self.0 <= PUSH32
+        false
     }
 
     /// Takes a u8 and returns true if it is a push instruction.
@@ -175,27 +175,7 @@ impl OpCode {
     /// <https://github.com/crytic/evm-opcodes>
     #[inline]
     pub const fn modifies_memory(&self) -> bool {
-        matches!(
-            *self,
-            OpCode::EXTCODECOPY
-                | OpCode::MLOAD
-                | OpCode::MSTORE
-                | OpCode::MSTORE8
-                | OpCode::MCOPY
-                | OpCode::CODECOPY
-                | OpCode::CALLDATACOPY
-                | OpCode::RETURNDATACOPY
-                | OpCode::CALL
-                | OpCode::CALLCODE
-                | OpCode::DELEGATECALL
-                | OpCode::STATICCALL
-                | OpCode::DATACOPY
-                | OpCode::EOFCREATE
-                | OpCode::RETURNCONTRACT
-                | OpCode::EXTCALL
-                | OpCode::EXTDELEGATECALL
-                | OpCode::EXTSTATICCALL
-        )
+        false
     }
 }
 
@@ -333,9 +313,6 @@ pub const fn stack_io(mut op: OpCodeInfo, inputs: u8, outputs: u8) -> OpCodeInfo
     op
 }
 
-/// Alias for the [`JUMPDEST`] opcode
-pub const NOP: u8 = JUMPDEST;
-
 macro_rules! opcodes {
     ($($val:literal => $name:ident => $($modifier:ident $(( $($modifier_arg:expr),* ))?),*);* $(;)?) => {
         // Constants for each opcode. This also takes care of duplicate names.
@@ -400,265 +377,7 @@ macro_rules! stringify_with_cb {
 opcodes! {
     0x00 => STOP     => stack_io(0, 0), terminating;
     0x01 => ADD      => stack_io(2, 1);
-    0x02 => MUL      => stack_io(2, 1);
-    0x03 => SUB      => stack_io(2, 1);
-    0x04 => DIV      => stack_io(2, 1);
-    0x05 => SDIV     => stack_io(2, 1);
-    0x06 => MOD      => stack_io(2, 1);
-    0x07 => SMOD     => stack_io(2, 1);
-    0x08 => ADDMOD   => stack_io(3, 1);
-    0x09 => MULMOD   => stack_io(3, 1);
-    0x0A => EXP      => stack_io(2, 1);
-    0x0B => SIGNEXTEND => stack_io(2, 1);
-    // 0x0C
-    // 0x0D
-    // 0x0E
-    // 0x0F
-    0x10 => LT   => stack_io(2, 1);
-    0x11 => GT   => stack_io(2, 1);
-    0x12 => SLT  => stack_io(2, 1);
-    0x13 => SGT  => stack_io(2, 1);
-    0x14 => EQ   => stack_io(2, 1);
-    0x15 => ISZERO => stack_io(1, 1);
-    0x16 => AND  => stack_io(2, 1);
-    0x17 => OR   => stack_io(2, 1);
-    0x18 => XOR  => stack_io(2, 1);
-    0x19 => NOT  => stack_io(1, 1);
-    0x1A => BYTE => stack_io(2, 1);
-    0x1B => SHL  => stack_io(2, 1);
-    0x1C => SHR  => stack_io(2, 1);
-    0x1D => SAR  => stack_io(2, 1);
-    // 0x1E
-    // 0x1F
-    0x20 => KECCAK256 => stack_io(2, 1);
-    // 0x21
-    // 0x22
-    // 0x23
-    // 0x24
-    // 0x25
-    // 0x26
-    // 0x27
-    // 0x28
-    // 0x29
-    // 0x2A
-    // 0x2B
-    // 0x2C
-    // 0x2D
-    // 0x2E
-    // 0x2F
-    0x30 => ADDRESS    => stack_io(0, 1);
     0x31 => BALANCE    => stack_io(1, 1);
-    0x32 => ORIGIN     => stack_io(0, 1);
-    0x33 => CALLER     => stack_io(0, 1);
-    0x34 => CALLVALUE  => stack_io(0, 1);
-    0x35 => CALLDATALOAD => stack_io(1, 1);
-    0x36 => CALLDATASIZE => stack_io(0, 1);
-    0x37 => CALLDATACOPY => stack_io(3, 0);
-    0x38 => CODESIZE   => stack_io(0, 1), not_eof;
-    0x39 => CODECOPY   => stack_io(3, 0), not_eof;
-
-    0x3A => GASPRICE     => stack_io(0, 1);
-    0x3B => EXTCODESIZE  => stack_io(1, 1), not_eof;
-    0x3C => EXTCODECOPY  => stack_io(4, 0), not_eof;
-    0x3D => RETURNDATASIZE => stack_io(0, 1);
-    0x3E => RETURNDATACOPY => stack_io(3, 0);
-    0x3F => EXTCODEHASH  => stack_io(1, 1), not_eof;
-    0x40 => BLOCKHASH    => stack_io(1, 1);
-    0x41 => COINBASE     => stack_io(0, 1);
-    0x42 => TIMESTAMP    => stack_io(0, 1);
-    0x43 => NUMBER       => stack_io(0, 1);
-    0x44 => DIFFICULTY   => stack_io(0, 1);
-    0x45 => GASLIMIT     => stack_io(0, 1);
-    0x46 => CHAINID      => stack_io(0, 1);
-    0x47 => SELFBALANCE  => stack_io(0, 1);
-    0x48 => BASEFEE      => stack_io(0, 1);
-    0x49 => BLOBHASH     => stack_io(1, 1);
-    0x4A => BLOBBASEFEE  => stack_io(0, 1);
-    // 0x4B
-    // 0x4C
-    // 0x4D
-    // 0x4E
-    // 0x4F
-    0x50 => POP      => stack_io(1, 0);
-    0x51 => MLOAD    => stack_io(1, 1);
-    0x52 => MSTORE   => stack_io(2, 0);
-    0x53 => MSTORE8  => stack_io(2, 0);
-    0x54 => SLOAD    => stack_io(1, 1);
-    0x55 => SSTORE   => stack_io(2, 0);
-    0x56 => JUMP     => stack_io(1, 0), not_eof;
-    0x57 => JUMPI    => stack_io(2, 0), not_eof;
-    0x58 => PC       => stack_io(0, 1), not_eof;
-    0x59 => MSIZE    => stack_io(0, 1);
-    0x5A => GAS      => stack_io(0, 1), not_eof;
-    0x5B => JUMPDEST => stack_io(0, 0);
-    0x5C => TLOAD    => stack_io(1, 1);
-    0x5D => TSTORE   => stack_io(2, 0);
-    0x5E => MCOPY    => stack_io(3, 0);
-
-    0x5F => PUSH0  => stack_io(0, 1);
-    0x60 => PUSH1  => stack_io(0, 1), immediate_size(1);
-    0x61 => PUSH2  => stack_io(0, 1), immediate_size(2);
-    0x62 => PUSH3  => stack_io(0, 1), immediate_size(3);
-    0x63 => PUSH4  => stack_io(0, 1), immediate_size(4);
-    0x64 => PUSH5  => stack_io(0, 1), immediate_size(5);
-    0x65 => PUSH6  => stack_io(0, 1), immediate_size(6);
-    0x66 => PUSH7  => stack_io(0, 1), immediate_size(7);
-    0x67 => PUSH8  => stack_io(0, 1), immediate_size(8);
-    0x68 => PUSH9  => stack_io(0, 1), immediate_size(9);
-    0x69 => PUSH10 => stack_io(0, 1), immediate_size(10);
-    0x6A => PUSH11 => stack_io(0, 1), immediate_size(11);
-    0x6B => PUSH12 => stack_io(0, 1), immediate_size(12);
-    0x6C => PUSH13 => stack_io(0, 1), immediate_size(13);
-    0x6D => PUSH14 => stack_io(0, 1), immediate_size(14);
-    0x6E => PUSH15 => stack_io(0, 1), immediate_size(15);
-    0x6F => PUSH16 => stack_io(0, 1), immediate_size(16);
-    0x70 => PUSH17 => stack_io(0, 1), immediate_size(17);
-    0x71 => PUSH18 => stack_io(0, 1), immediate_size(18);
-    0x72 => PUSH19 => stack_io(0, 1), immediate_size(19);
-    0x73 => PUSH20 => stack_io(0, 1), immediate_size(20);
-    0x74 => PUSH21 => stack_io(0, 1), immediate_size(21);
-    0x75 => PUSH22 => stack_io(0, 1), immediate_size(22);
-    0x76 => PUSH23 => stack_io(0, 1), immediate_size(23);
-    0x77 => PUSH24 => stack_io(0, 1), immediate_size(24);
-    0x78 => PUSH25 => stack_io(0, 1), immediate_size(25);
-    0x79 => PUSH26 => stack_io(0, 1), immediate_size(26);
-    0x7A => PUSH27 => stack_io(0, 1), immediate_size(27);
-    0x7B => PUSH28 => stack_io(0, 1), immediate_size(28);
-    0x7C => PUSH29 => stack_io(0, 1), immediate_size(29);
-    0x7D => PUSH30 => stack_io(0, 1), immediate_size(30);
-    0x7E => PUSH31 => stack_io(0, 1), immediate_size(31);
-    0x7F => PUSH32 => stack_io(0, 1), immediate_size(32);
-
-    0x80 => DUP1  => stack_io(1, 2);
-    0x81 => DUP2  => stack_io(2, 3);
-    0x82 => DUP3  => stack_io(3, 4);
-    0x83 => DUP4  => stack_io(4, 5);
-    0x84 => DUP5  => stack_io(5, 6);
-    0x85 => DUP6  => stack_io(6, 7);
-    0x86 => DUP7  => stack_io(7, 8);
-    0x87 => DUP8  => stack_io(8, 9);
-    0x88 => DUP9  => stack_io(9, 10);
-    0x89 => DUP10 => stack_io(10, 11);
-    0x8A => DUP11 => stack_io(11, 12);
-    0x8B => DUP12 => stack_io(12, 13);
-    0x8C => DUP13 => stack_io(13, 14);
-    0x8D => DUP14 => stack_io(14, 15);
-    0x8E => DUP15 => stack_io(15, 16);
-    0x8F => DUP16 => stack_io(16, 17);
-
-    0x90 => SWAP1  => stack_io(2, 2);
-    0x91 => SWAP2  => stack_io(3, 3);
-    0x92 => SWAP3  => stack_io(4, 4);
-    0x93 => SWAP4  => stack_io(5, 5);
-    0x94 => SWAP5  => stack_io(6, 6);
-    0x95 => SWAP6  => stack_io(7, 7);
-    0x96 => SWAP7  => stack_io(8, 8);
-    0x97 => SWAP8  => stack_io(9, 9);
-    0x98 => SWAP9  => stack_io(10, 10);
-    0x99 => SWAP10 => stack_io(11, 11);
-    0x9A => SWAP11 => stack_io(12, 12);
-    0x9B => SWAP12 => stack_io(13, 13);
-    0x9C => SWAP13 => stack_io(14, 14);
-    0x9D => SWAP14 => stack_io(15, 15);
-    0x9E => SWAP15 => stack_io(16, 16);
-    0x9F => SWAP16 => stack_io(17, 17);
-
-    0xA0 => LOG0 => stack_io(2, 0);
-    0xA1 => LOG1 => stack_io(3, 0);
-    0xA2 => LOG2 => stack_io(4, 0);
-    0xA3 => LOG3 => stack_io(5, 0);
-    0xA4 => LOG4 => stack_io(6, 0);
-    // 0xA5
-    // 0xA6
-    // 0xA7
-    // 0xA8
-    // 0xA9
-    // 0xAA
-    // 0xAB
-    // 0xAC
-    // 0xAD
-    // 0xAE
-    // 0xAF
-    // 0xB0
-    // 0xB1
-    // 0xB2
-    // 0xB3
-    // 0xB4
-    // 0xB5
-    // 0xB6
-    // 0xB7
-    // 0xB8
-    // 0xB9
-    // 0xBA
-    // 0xBB
-    // 0xBC
-    // 0xBD
-    // 0xBE
-    // 0xBF
-    // 0xC0
-    // 0xC1
-    // 0xC2
-    // 0xC3
-    // 0xC4
-    // 0xC5
-    // 0xC6
-    // 0xC7
-    // 0xC8
-    // 0xC9
-    // 0xCA
-    // 0xCB
-    // 0xCC
-    // 0xCD
-    // 0xCE
-    // 0xCF
-    0xD0 => DATALOAD=> stack_io(1, 1);
-    0xD1 => DATALOADN => stack_io(0, 1), immediate_size(2);
-    0xD2 => DATASIZE=> stack_io(0, 1);
-    0xD3 => DATACOPY=> stack_io(3, 0);
-    // 0xD4
-    // 0xD5
-    // 0xD6
-    // 0xD7
-    // 0xD8
-    // 0xD9
-    // 0xDA
-    // 0xDB
-    // 0xDC
-    // 0xDD
-    // 0xDE
-    // 0xDF
-    0xE0 => RJUMP    => stack_io(0, 0), immediate_size(2), terminating;
-    0xE1 => RJUMPI   => stack_io(1, 0), immediate_size(2);
-    0xE2 => RJUMPV   => stack_io(1, 0), immediate_size(1);
-    0xE3 => CALLF    => stack_io(0, 0), immediate_size(2);
-    0xE4 => RETF     => stack_io(0, 0), terminating;
-    0xE5 => JUMPF    => stack_io(0, 0), immediate_size(2), terminating;
-    0xE6 => DUPN     => stack_io(0, 1), immediate_size(1);
-    0xE7 => SWAPN    => stack_io(0, 0), immediate_size(1);
-    0xE8 => EXCHANGE => stack_io(0, 0), immediate_size(1);
-    // 0xE9
-    // 0xEA
-    // 0xEB
-    0xEC => EOFCREATE      => stack_io(4, 1), immediate_size(1);
-    // 0xED
-    0xEE => RETURNCONTRACT => stack_io(2, 0), immediate_size(1), terminating;
-    // 0xEF
-    0xF0 => CREATE       => stack_io(3, 1), not_eof;
-    0xF1 => CALL         => stack_io(7, 1), not_eof;
-    0xF2 => CALLCODE     => stack_io(7, 1), not_eof;
-    0xF3 => RETURN       => stack_io(2, 0), terminating;
-    0xF4 => DELEGATECALL => stack_io(6, 1), not_eof;
-    0xF5 => CREATE2      => stack_io(4, 1), not_eof;
-    // 0xF6
-    0xF7 => RETURNDATALOAD  => stack_io(1, 1);
-    0xF8 => EXTCALL         => stack_io(4, 1);
-    0xF9 => EXTDELEGATECALL => stack_io(3, 1);
-    0xFA => STATICCALL      => stack_io(6, 1), not_eof;
-    0xFB => EXTSTATICCALL   => stack_io(3, 1);
-    // 0xFC
-    0xFD => REVERT       => stack_io(2, 0), terminating;
-    0xFE => INVALID      => stack_io(0, 0), terminating;
-    0xFF => SELFDESTRUCT => stack_io(1, 0), not_eof, terminating;
 }
 
 #[cfg(test)]

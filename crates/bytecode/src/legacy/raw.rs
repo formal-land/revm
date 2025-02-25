@@ -1,5 +1,4 @@
 use super::{JumpTable, LegacyAnalyzedBytecode};
-use crate::opcode;
 use bitvec::{bitvec, order::Lsb0, vec::BitVec};
 use core::ops::Deref;
 use primitives::Bytes;
@@ -46,29 +45,7 @@ impl Deref for LegacyRawBytecode {
 
 /// Analyze the bytecode to find the jumpdests
 pub fn analyze_legacy(bytetecode: &[u8]) -> JumpTable {
-    let mut jumps: BitVec<u8> = bitvec![u8, Lsb0; 0; bytetecode.len()];
-
-    let range = bytetecode.as_ptr_range();
-    let start = range.start;
-    let mut iterator = start;
-    let end = range.end;
-    while iterator < end {
-        let opcode = unsafe { *iterator };
-        if opcode::JUMPDEST == opcode {
-            // SAFETY: Jumps are max length of the code
-            unsafe { jumps.set_unchecked(iterator.offset_from(start) as usize, true) }
-            iterator = unsafe { iterator.offset(1) };
-        } else {
-            let push_offset = opcode.wrapping_sub(opcode::PUSH1);
-            if push_offset < 32 {
-                // SAFETY: Iterator access range is checked in the while loop
-                iterator = unsafe { iterator.offset((push_offset + 2) as isize) };
-            } else {
-                // SAFETY: Iterator access range is checked in the while loop
-                iterator = unsafe { iterator.offset(1) };
-            }
-        }
-    }
+    let jumps: BitVec<u8> = bitvec![u8, Lsb0; 0; bytetecode.len()];
 
     JumpTable(Arc::new(jumps))
 }

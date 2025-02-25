@@ -1,7 +1,7 @@
 #![cfg(feature = "std")]
 
 pub fn print(code: &[u8]) {
-    use crate::{opcode::*, utils::read_i16};
+    use crate::opcode::*;
     use primitives::hex;
 
     // We can check validity and jump destinations in one pass.
@@ -34,24 +34,7 @@ pub fn print(code: &[u8]) {
         }
         println!();
 
-        let mut rjumpv_additional_immediates = 0;
-        if op == RJUMPV {
-            let max_index = code[i + 1] as usize;
-            let len = max_index + 1;
-            // And max_index+1 is to get size of vtable as index starts from 0.
-            rjumpv_additional_immediates = len * 2;
-
-            // +1 is for max_index byte
-            if i + 1 + rjumpv_additional_immediates >= code.len() {
-                println!("Malformed code: immediate out of bounds");
-                break;
-            }
-
-            for vtablei in 0..len {
-                let offset = unsafe { read_i16(code.as_ptr().add(i + 2 + 2 * vtablei)) } as isize;
-                println!("RJUMPV[{vtablei}]: 0x{offset:04X} ({offset})");
-            }
-        }
+        let rjumpv_additional_immediates = 0;
 
         i += 1 + opcode.immediate_size() as usize + rjumpv_additional_immediates;
     }
